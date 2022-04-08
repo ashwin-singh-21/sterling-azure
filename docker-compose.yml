@@ -1,0 +1,147 @@
+version: '3.8'
+
+services:
+
+    redis:
+        image: redis:latest
+        container_name: redis
+        hostname: redis
+        restart: always
+        volumes:
+            - redis_data:/data:rw
+        ports:
+            - "6379:6379"
+        networks:
+            - main
+
+    selenium:
+        image: selenium/standalone-chrome
+        container_name: selenium
+        hostname: selenium
+        restart: always
+        ports:
+            - 4444:4444
+        networks:
+            - main
+
+    db:
+        image: postgres
+        container_name: db
+        hostname: db
+        restart: always
+        ports:
+            - "5432:5432"
+        networks:
+            - main
+        environment:
+            POSTGRES_USER: sterlingsquare_admin
+            POSTGRES_PASSWORD: SterlingSquare@1234
+            POSTGRES_DB: sterlingsquare_db
+            TZ: "Asia/Kolkata"
+        command:
+            - "postgres"
+            - "-c"
+            - "max_connections=1000"
+            - "-c"
+            - "shared_buffers=1GB"
+            - "-c"
+            - "TimeZone=Asia/Kolkata"
+        volumes:
+            - postgres_data:/var/lib/postgresql/data/
+
+    adminer:
+        image: adminer
+        container_name: adminer
+        hostname: adminer
+        restart: always
+        ports:
+           - "8080:8080"
+        networks:
+            - main
+
+    django:
+        build:
+            context: .
+        container_name: django
+        hostname: django
+        restart: always
+        command: python3 manage.py runserver 0.0.0.0:8000
+        volumes:
+            - .:/app
+            - /etc/timezone:/etc/timezone:ro
+            - /etc/localtime:/etc/localtime:ro
+        ports:
+            - "8000:8000"
+        networks:
+            - main
+        stdin_open: true
+        tty: true
+        links:
+            - redis
+            - db
+        depends_on:
+            - redis
+            - db
+
+    celery:
+        build: .
+        container_name: celery
+        hostname: celery
+        restart: always
+        command: celery -A sterling_square worker -P gevent --pool=prefork --concurrency=4 --loglevel=info --without-gossip
+        volumes:
+            - .:/app
+            - /etc/timezone:/etc/timezone:ro
+            - /etc/localtime:/etc/localtime:ro
+        links:
+            - redis
+            - db
+        depends_on:
+            - redis
+            - db
+        networks:
+            - main
+
+    celery_beat:
+        build: .
+        container_name: celery_beat
+        hostname: celery_beat
+        restart: always
+        command: celery -A sterling_square beat -l info
+        volumes:
+            - .:/app
+            - /etc/timezone:/etc/timezone:ro
+            - /etc/localtime:/etc/localtime:ro
+        links:
+            - redis
+            - db
+        depends_on:
+            - redis
+            - db
+        networks:
+            - main
+
+    flower:
+        image: mher/flower
+        container_name: flower
+        hostname: flower
+        restart: always
+        environment:
+          - CELERY_BROKER_URL=redis://redis:6379
+          - FLOWER_PORT=8888
+        ports:
+          - 8888:8888
+        networks:
+            - main
+        depends_on:
+            - celery_beat
+            - celery
+            - redis
+            
+networks:
+  main:
+   driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:

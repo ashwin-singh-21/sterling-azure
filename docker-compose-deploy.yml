@@ -1,0 +1,239 @@
+version: '3.8'
+
+services:
+
+    redis:
+        image: redis:latest
+        container_name: redis
+        hostname: redis
+        restart: always
+        volumes:
+            - redis_data:/data:rw
+        ports:
+            - "6379:6379"
+        networks:
+            - main
+
+    selenium:
+        image: selenium/standalone-chrome
+        container_name: selenium
+        hostname: selenium
+        restart: always
+        ports:
+            - 4444:4444
+        networks:
+            - main
+
+    db:
+        image: postgres
+        container_name: db
+        hostname: db
+        restart: always
+        ports:
+            - "5432:5432"
+        networks:
+            - main
+        environment:
+            POSTGRES_USER: sterlingsquare_admin
+            POSTGRES_PASSWORD: SterlingSquare@1234
+            POSTGRES_DB: sterlingsquare_db
+            TZ: "Asia/Kolkata"
+        command:
+            - "postgres"
+            - "-c"
+            - "max_connections=1000"
+            - "-c"
+            - "shared_buffers=1GB"
+            - "-c"
+            - "TimeZone=Asia/Kolkata"
+        volumes:
+            - postgres_data:/var/lib/postgresql/data/
+
+    adminer:
+        image: adminer
+        container_name: adminer
+        hostname: adminer
+        restart: always
+        ports:
+           - "8080:8080"
+        networks:
+            - main
+
+    django1:
+        build:
+            context: .
+        container_name: django1
+        hostname: django1
+        restart: always
+        command: uwsgi --http :8010 --http-timeout=300 --http-websockets --master --enable-threads --buffer-size=8192 --processes=8 --threads=8 --module sterling_square.wsgi
+        volumes:
+          - ./static:/app/static:rw
+          - ./media:/app/media:rw
+          - /etc/timezone:/etc/timezone:ro
+          - /etc/localtime:/etc/localtime:ro
+        networks:
+            - main
+        ports:
+            - "8010:8000"
+        expose:
+            - "8010"
+        links:
+            - redis
+            - db
+        depends_on:
+            - redis
+            - db
+
+    django2:
+        build:
+            context: .
+        container_name: django2
+        hostname: django2
+        restart: always
+        command: uwsgi --http :8020 --http-timeout=300 --http-websockets --master --enable-threads --buffer-size=8192 --processes=8 --threads=8 --module sterling_square.wsgi
+        volumes:
+          - ./static:/app/static:rw
+          - ./media:/app/media:rw
+          - /etc/timezone:/etc/timezone:ro
+          - /etc/localtime:/etc/localtime:ro
+        networks:
+            - main
+        ports:
+            - "8020:8000"
+        expose:
+            - "8020"
+        links:
+            - redis
+            - db
+        depends_on:
+            - redis
+            - db
+
+    django3:
+        build:
+            context: .
+        container_name: django3
+        hostname: django3
+        restart: always
+        command: uwsgi --http :8030 --http-timeout=300 --http-websockets --master --enable-threads --buffer-size=8192 --processes=8 --threads=8 --module sterling_square.wsgi
+        volumes:
+          - ./static:/app/static:rw
+          - ./media:/app/media:rw
+          - /etc/timezone:/etc/timezone:ro
+          - /etc/localtime:/etc/localtime:ro
+        networks:
+            - main
+        ports:
+            - "8030:8000"
+        expose:
+            - "8030"
+        links:
+            - redis
+            - db
+        depends_on:
+            - redis
+            - db
+
+    daphne1:
+        build:
+            context: .
+        container_name: daphne1
+        hostname: daphne1
+        restart: always
+        command: daphne -b 0.0.0.0 -p 9010 sterling_square.asgi:application
+        volumes:
+            - .:/app
+        expose:
+            - 9010
+        networks:
+            - main
+        depends_on:
+          - django1
+          - django2
+          - django3
+          - redis
+        links:
+          - redis
+
+    celery:
+        build:
+            context: .
+        container_name: celery
+        hostname: celery
+        restart: always
+        command: celery -A sterling_square worker -P gevent --pool=prefork --concurrency=8 --loglevel=info --without-gossip
+        volumes:
+            - .:/app
+            - /etc/timezone:/etc/timezone:ro
+            - /etc/localtime:/etc/localtime:ro
+        links:
+            - redis
+            - db
+        depends_on:
+            - redis
+            - db
+        networks:
+            - main
+
+    celery_beat:
+        build:
+            context: .
+        command: celery -A sterling_square beat -l info
+        container_name: celery_beat
+        hostname: celery_beat
+        restart: always
+        volumes:
+            - .:/app
+            - /etc/timezone:/etc/timezone:ro
+            - /etc/localtime:/etc/localtime:ro
+        links:
+            - redis
+            - db
+        depends_on:
+            - redis
+            - db
+        networks:
+            - main
+
+    nginx:
+        build: ./nginx
+        container_name: nginx
+        hostname: nginx
+        restart: always
+        volumes:
+          - ./static:/app/static:ro
+          - ./media:/app/media:ro
+        networks:
+            - main
+        ports:
+        - "80:8000"
+        depends_on:
+        - django1
+        - django2
+        - django3
+        - daphne1
+
+    flower:
+        image: mher/flower
+        container_name: flower
+        hostname: flower
+        restart: always
+        environment:
+          - CELERY_BROKER_URL=redis://redis:6379
+          - FLOWER_PORT=8888
+        ports:
+          - 8888:8888
+        networks:
+            - main
+        depends_on:
+            - celery_beat
+            - celery
+            - redis
+
+networks:
+  main:
+   driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:

@@ -1,0 +1,206 @@
+{% extends 'base_dashboard.html' %}
+{% load static %}
+{% block content %}
+<script src="https://code.jquery.com/jquery-3.5.1.min.js"
+        integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.18.1/moment.min.js"></script>
+<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+
+<style>
+@media (max-width: 768px){
+    #tabl_all{
+       overflow:scroll;
+       margin-top:-20px;
+       width:100% !important;
+   }
+   h3{
+       font-size:15px;
+   }
+   th{
+       font-size:10px !important;
+   }
+   tbody td{
+       font-size:10px !important;
+   }
+   
+   
+}
+table{
+    border:none !important;
+    background-color: transparent !important;
+}
+th{
+    color:white !important;
+    background-color:rgb(7,10,27) !important;
+}
+    td  {
+       background-color:rgb(7,10,27) !important;
+    }
+.button_transaction {
+        display: flex;
+    }
+
+    .button_transaction button {
+        border: none;
+        font-size: 18px;
+        color: white;
+        margin-left: 10px;       
+        cursor: pointer;
+        font-size: small;
+        background-color: transparent;
+        font-weight: 500;
+        padding: 10px 5px;
+        outline: none !important;
+    }
+
+   .button_transaction button:focus {
+        border-bottom: 2px solid #00ff39 !important;
+        color: #00ff39 !important;
+    }
+
+    .pen-class-btn {
+        border-bottom: 2px solid #00ff39 !important;
+        color: #00ff39 !important;
+    }
+
+    .table-class {
+        margin-top:-40px !important
+   }
+
+    .button_transaction button:hover{
+        background-color: #6c757d;
+    }
+</style>
+
+<div class="container no-fluid">
+    <div class="row sm-gutters">
+        <!-- <div class="col-sm-1"></div> -->
+        <div class="col-md-8 padding-right-30">
+            <div class="main-chart mb15">
+                <!-- TradingView Widget BEGIN -->
+                <div class="tradingview-widget-container">
+                    <div id="tradingview_e8053" class="">
+                        <input type="hidden" class="has_position" value="{{has_position}}">
+                        <input type="hidden" class="theme-color" value="">
+                        {% include 'includes/dashboard_includes/line-chart-main-dashboard.html' %}
+                    </div>
+                </div>
+                <!-- TradingView Widget END -->
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 label-text-bold">Buying Power</div>
+                <div class="col-md-6 label-text text-right" id="buying_power">-</div>
+            </div>
+            <hr style="background-color: #fff">
+            <br>
+            <div class="row">
+                <div class="button_transaction"><button id="pen-button" class="pen-class-btn">Pending Transaction</button>
+                         <button id="succ-button">Successfull Transaction</button></div>
+
+                  <table id="pending-t" style="border-collapse: collapse; border:1px solid #ccc;" class="table">
+                    <thead>
+                        <tr>
+                            <th>Symbol</th>
+                            <th>Type</th>
+                            <th>Expires</th>
+                            <th>Order Type</th>
+                            <th>Status</th>
+                            <th>Limit Price</th>
+                            <th>Price</th>
+                        </tr>
+                    </thead>
+                <tbody id="tableData1"></tbody>
+                        <tbody id="tableData2"></tbody>
+                </table>
+            </div>
+            {% include 'includes/dashboard_includes/position-table-details.html' %}
+            {#{% include 'includes/dashboard_includes/upcoming_activity.html' %}#}
+            <br>
+            {# <hr style="background-color: #fff"> #}
+
+            {% comment %}
+            {% include 'includes/dashboard_includes/company_info.html' %}
+            {% endcomment %}
+
+            {% comment %}
+            {% include 'includes/dashboard_includes/scatter-plot-chart-main.html' %}
+            {% endcomment %}
+            <br>
+            <br>
+            <br>
+            {% include 'includes/dashboard_includes/most_active.html' %}
+        </div>
+        <div class="col-md-4 padding-left-30 medi_fix">
+            <div class=" ">
+                {% include 'includes/dashboard_includes/watchlist_and_shares.html' %}
+            </div>
+        </div>
+        
+        <div class=" container data-table-stock-position">
+<div id="tabl_all" class="col-md-8 label-text-bold table-class">
+
+</div>    
+</div>
+</div>
+<script >
+    const APIfetch = () => {
+            let url = "/accounts/transaction_list"
+            fetch(url, {
+                method: 'GET',
+            })
+                .then(response => response.json())
+                .then(json =>{personData = json;
+            console.log(personData)
+            
+            const tableBody = document.getElementById("tableData");
+            let dataHtml1 = ''
+            let dataHtml2 = ''
+
+            for (let person of personData) {
+                if (person.status == "pending") {
+                    dataHtml1 += `<tr>
+                        <td>${person.stockticker_id__symbol}</td>
+                        <td>${person.transaction_type}</td>
+                        <td>${person.expires}</td>
+                        <td>${person.ordertype}</td>
+                        <td>${person.status}</td>
+                        <td>${person.limit_price}</td>
+                        <td>${person.price}</td>
+                    </tr>`;
+                }
+                else if (person.status == "executed") {
+                     dataHtml2 += `<tr>
+                        <td>${person.stockticker_id__symbol}</td>
+                        <td>${person.transaction_type}</td>
+                        <td>${person.expires}</td>
+                        <td>${person.ordertype}</td>
+                        <td>${person.status}</td>
+                        <td>${person.limit_price}</td>
+                        <td>${person.price}</td>
+                    </tr>`;
+
+            }
+            }
+        document.getElementById("tableData1").innerHTML = dataHtml1
+
+        document.getElementById("pen-button").onclick = function () {
+            document.getElementById("tableData1").style.display = ""
+            document.getElementById("tableData2").style.display = "none"
+            document.getElementById("tableData1").innerHTML = dataHtml1
+
+        }
+        document.getElementById("succ-button").onclick = function () {
+            document.getElementById("pen-button").classList.remove("pen-class-btn");
+            document.getElementById("tableData2").style.display = ""
+            document.getElementById("tableData1").style.display = "none"
+            document.getElementById("tableData2").innerHTML = dataHtml2
+
+        }
+            setTimeout(APIfetch, 5000);})
+        }
+        APIfetch()
+</script>
+
+
+{% endblock %}
